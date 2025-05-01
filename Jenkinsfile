@@ -32,23 +32,32 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
-            steps {
-                script {
-                    withCredentials([sshUserPrivateKey(credentialsId: 'EC2-SSH-Key', keyFileVariable: 'SSH_KEY')]) {
-                        sh "scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JAR_FILE} ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app.jar"
-                        sh """
-                        ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${EC2_USER}@${EC2_HOST} << EOF
-                        sudo systemctl stop my-java-app || true
-                        nohup java -jar /home/${EC2_USER}/app.jar &
-                        sudo systemctl start my-java-app
-                        EOF
-                        """
-                    }
-                }
+       stage('Deploy') {
+    steps {
+        script {
+            // Use the SSH private key from Jenkins credentials
+            withCredentials([sshUserPrivateKey(credentialsId: 'EC2-SSH-Key', keyFileVariable: 'SSH_KEY')]) {
+                // Copy the .jar file to EC2 instance using SCP
+                sh """
+                scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${JAR_FILE} ${EC2_USER}@${EC2_HOST}:/home/${EC2_USER}/app.jar
+                """
+
+                // SSH into EC2 and run the application
+                sh """
+                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${EC2_USER}@${EC2_HOST} << EOF
+                # Stop the existing application (if running)
+                sudo systemctl stop my-java-app || true
+                # Run the new application
+                nohup java -jar /home/${EC2_USER}/app.jar &
+                # Optionally, start the application service (if using systemd)
+                sudo systemctl start my-java-app
+                EOF
+                """
             }
         }
     }
+}
+
 
     post {
         always {
